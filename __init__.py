@@ -42,7 +42,7 @@ class LODRIVER_PT_LodPanel(bpy.types.Panel):
         self.layout.operator('lodriver.createdrivers', text ='Create Visibility Drivers for Selected')
         self.layout.prop(context.scene,"LODRIVERSpacing",slider=False)
 
-#function to make a physics object thinner 
+#function to add properties and drivers to selected objects to make them hide and show in renders and viewport based on distance to empty
 class LODRIVER_OT_CreateDrivers(bpy.types.Operator):
     bl_idname = "lodriver.createdrivers"
     bl_label = "Create Visibility Drivers for Selected"
@@ -93,7 +93,7 @@ class LODRIVER_OT_CreateDrivers(bpy.types.Operator):
             print(lodObject.name)
         return {'FINISHED'}
              
-#register and unregister all Lod River classes
+#register and unregister all LOD River classes
 lodriverClasses = (  LODRIVER_PT_LodPanel,
                     LODRIVER_OT_CreateDrivers)
 
