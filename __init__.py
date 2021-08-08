@@ -36,8 +36,10 @@ class ACTLOD_PT_Settings(bpy.types.Panel):
     bl_context = 'objectmode'
     bl_category = 'Active LOD'
     bpy.types.Scene.ACTLODStopSignal = bpy.props.BoolProperty(name="Stop Active LOD",description="Stop any currently running Active LOD operators",default=True)
+    bpy.types.Scene.ACTLODChunkSize = bpy.props.IntProperty(name="Scene Iteration Chunk Size",description="How many scene items to iterate in a chunk per tick",default=10,min=1, max=1000)
 
     def draw(self, context):
+        self.layout.prop(context.scene,"ACTLODChunkSize")
         self.layout.operator('actlod.startactlod', text ='Start Active LOD')
         self.layout.operator('actlod.stopactlod', text ='Stop Active LOD')
 
@@ -50,7 +52,6 @@ class ACTLOD_OT_StartActiveLod(bpy.types.Operator):
     #timer for running modal and settings for iterating through scene in chunks
     ACTLODTimer = None
     chunkIteration = 0
-    chunkSizeMax = 10
     
     def setupCollection(self,context,newCollectionName):
         if(newCollectionName not in bpy.data.collections.keys()):
@@ -71,7 +72,7 @@ class ACTLOD_OT_StartActiveLod(bpy.types.Operator):
             self.report({'INFO'},"Active LOD stopped.")
             return {'CANCELLED'}
         #set chunk size to max, or to the scene object list length if the scene is small
-        chunkSizeAdjusted = self.chunkSizeMax
+        chunkSizeAdjusted = bpy.context.scene.ACTLODChunkSize
         if(chunkSizeAdjusted > len(bpy.context.scene.objects)):
             chunkSizeAdjusted = len(bpy.context.scene.objects)
         #iterate through scene objects in chunks
