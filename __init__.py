@@ -75,7 +75,7 @@ class ACTLOD_OT_StartActiveLod(bpy.types.Operator):
         #stop modal timer if the stop signal is activated
         if(context.scene.ACTLODStopSignal == True):
             context.window_manager.event_timer_remove(self.ACTLODTimer)
-            print("done")
+            print("Active LOD stopped.")
             return {'CANCELLED'}
         #set chunk size to max, or to the scene object list length if the scene is small
         chunkSizeAdjusted = self.chunkSizeMax
@@ -91,9 +91,10 @@ class ACTLOD_OT_StartActiveLod(bpy.types.Operator):
                     shortestDistance = 999999
                     for distRefObject in bpy.data.collections['ACTLOD_REFERENCES'].objects:
                         measuredDistance = (distRefObject.matrix_world.translation-iterationObject.matrix_world.translation).length
+                        measuredDistance = measuredDistance / abs(distRefObject.scale[0]+distRefObject.scale[1]+distRefObject.scale[2])
                         if(measuredDistance < shortestDistance):
                             shortestDistance = measuredDistance
-                    print(str(shortestDistance) + " distance for " + iterationObject.name)
+                    #print(str(shortestDistance) + " distance for " + iterationObject.name)
                     #get desired lod level from distance
                     lodLevel = math.floor(shortestDistance)
                     if(lodLevel > 5):
@@ -128,6 +129,7 @@ class ACTLOD_OT_StartActiveLod(bpy.types.Operator):
             referenceObject = bpy.context.selected_objects[0]
             referenceObject.name = 'ACTLOD_DISTREF'
             self.assignToCollection(context,'ACTLOD_REFERENCES',referenceObject)
+        print("Active LOD started.")
         return {'RUNNING_MODAL'}
         
         
