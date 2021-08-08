@@ -54,11 +54,8 @@ class ACTLOD_OT_StartActiveLod(bpy.types.Operator):
     
     def setupCollection(self,context,newCollectionName):
         if(newCollectionName not in bpy.data.collections.keys()):
-            bpy.ops.collection.create(name=newCollectionName)
-            if(context.collection.name == "Master Collection"):
-                bpy.context.scene.collection.children.link(bpy.data.collections[newCollectionName])
-            else:
-                bpy.data.collections[context.collection.name].children.link(bpy.data.collections[newCollectionName])
+            newCollection = bpy.data.collections.new(name=newCollectionName)
+            bpy.context.collection.children.link(newCollection)
             return True
         else:
             return False
@@ -66,10 +63,6 @@ class ACTLOD_OT_StartActiveLod(bpy.types.Operator):
     def assignToCollection(self,context,assignCollectionName,assignObject):
         if(assignObject.name not in bpy.data.collections[assignCollectionName].objects):
             bpy.data.collections[assignCollectionName].objects.link(assignObject)
-            if(context.collection.name == "Master Collection"):
-                bpy.context.scene.collection.objects.unlink(assignObject)
-            else:
-                bpy.data.collections[context.collection.name].objects.unlink(assignObject)
     
     def modal(self, context, event):
         #stop modal timer if the stop signal is activated
@@ -103,6 +96,7 @@ class ACTLOD_OT_StartActiveLod(bpy.types.Operator):
                     if(not(iterationObject.data.name.split('_LOD_')[0] + "_LOD_" + str(lodLevel) in bpy.data.meshes)):
                         if(iterationObject.data.name.split('_LOD_')[0] in bpy.data.meshes):
                             iterationObject.data = bpy.data.meshes[iterationObject.data.name.split('_LOD_')[0]]
+                        iterationObject.data.use_fake_user = True
                         lodTriangulate = iterationObject.modifiers.new('ACTLOD_TRIANGULATE','TRIANGULATE')
                         lodDecimate = iterationObject.modifiers.new('ACTLOD_DECIMATE','DECIMATE')
                         lodDecimate.ratio = 1 - (lodLevel * 0.2)
@@ -125,15 +119,13 @@ class ACTLOD_OT_StartActiveLod(bpy.types.Operator):
             context.window_manager.modal_handler_add(self)
             #if an ACTLOD references collection is new to the scene, add a LOD distance reference object to it
             if(self.setupCollection(context,'ACTLOD_REFERENCES') == True):
-                bpy.ops.object.select_all(action='DESELECT')
-                bpy.ops.object.empty_add(type='SPHERE')
-                referenceObject = bpy.context.selected_objects[0]
-                referenceObject.name = 'ACTLOD_DISTREF'
+                referenceObject = bpy.data.objects.new("ACTLOD_DISTREF",None)
+                referenceObject.empty_display_type = 'SPHERE'
                 self.assignToCollection(context,'ACTLOD_REFERENCES',referenceObject)
             self.report({'INFO'},"Active LOD started.")
             return {'RUNNING_MODAL'}
         else:
-            self.report({'WARNING'},"Active LOD already running.")
+            self.report({'WARNING'},"Active LOD is already running. Please Stop Active LOD before pressing start.")
             return {'FINISHED'}
         
         
