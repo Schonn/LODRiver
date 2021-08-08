@@ -1,4 +1,4 @@
-# LOD River driver based viewport visibility Blender Addon
+# Active LOD Blender Addon
 # Copyright (C) 2021 Pierre
 #
 # This program is free software: you can redistribute it and/or modify it under
@@ -15,145 +15,140 @@
 
 #import blender python libraries
 import bpy
-import random
 import math
-import mathutils
+
 
 #addon info read by Blender
 bl_info = {
-    "name": "LOD River",
+    "name": "Active LOD",
     "author": "Pierre",
-    "version": (0, 0, 1),
-    "blender": (2, 91, 0),
-    "description": "Quickly set up drivers that show and hide objects based on their distance from other objects",
-    "category": "Object"
+    "version": (0, 0, 2),
+    "blender": (2, 93, 1),
+    "description": "Modal operator to replace LOD meshes based on distance to reference objects",
+    "category": "Animation"
     }
 
-#panel class for lod river menu items in object mode
-class LODRIVER_PT_LodPanel(bpy.types.Panel):
+#panel class for Active LOD Settings
+class ACTLOD_PT_Settings(bpy.types.Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_label = 'LOD River'
+    bl_label = 'Active LOD Settings'
     bl_context = 'objectmode'
-    bl_category = 'LOD River'
-    bpy.types.Scene.LODRIVERSpacing = bpy.props.FloatProperty(name="LOD Object Spacing",description="The amount of distance between a change in level of detail",default=10,min=0,max=90000)
+    bl_category = 'Active LOD'
+    bpy.types.Scene.ACTLODStopSignal = bpy.props.BoolProperty(name="Stop Active LOD",description="Stop any currently running Active LOD operators",default=True)
 
     def draw(self, context):
-        self.layout.operator('lodriver.parenttoempties', text ='Parent Selected Objects to Empties')
-        self.layout.operator('lodriver.createdrivers', text ='Create Visibility Drivers for Selected')
-        self.layout.prop(context.scene,"LODRIVERSpacing",slider=False)
-        self.layout.operator('lodriver.visibleoverrideon', text ='Visible Override on Active Collection')
-        self.layout.operator('lodriver.visibleoverrideoff', text ='No Visible Override on Active Collection')
+        self.layout.operator('actlod.startactlod', text ='Start Active LOD')
+        self.layout.operator('actlod.stopactlod', text ='Stop Active LOD')
 
-#function to add properties and drivers to selected objects to make them hide and show in renders and viewport based on distance to empty
-class LODRIVER_OT_CreateDrivers(bpy.types.Operator):
-    bl_idname = "lodriver.createdrivers"
-    bl_label = "Create Visibility Drivers for Selected"
-    bl_description = "Add a driver to the selected object that enables and disables visibility at certain distances from a reference object"
+#function to begin Active LOD
+class ACTLOD_OT_StartActiveLod(bpy.types.Operator):
+    bl_idname = "actlod.startactlod"
+    bl_label = "Start Active LOD"
+    bl_description = "Start Active LOD modal operator"
     
-    def execute(self, context):
-        #store selected objects
-        selectedObjects = bpy.context.selected_objects
-        #create distance reference empty if it does not exist
-        distanceReferenceEmpty = None
-        lodSpacingDistance = context.scene.LODRIVERSpacing
-        if not("LODRIVER_DISTREF_EMPTY" in bpy.context.scene.objects):
-            bpy.ops.object.empty_add(type='PLAIN_AXES')
-            distanceReferenceEmpty = bpy.context.selected_objects[0]
-            distanceReferenceEmpty.name = "LODRIVER_DISTREF_EMPTY"
+    #timer for running modal and settings for iterating through scene in chunks
+    ACTLODTimer = None
+    chunkIteration = 0
+    chunkSizeMax = 10
+    
+    def setupCollection(self,context,newCollectionName):
+        if(newCollectionName not in bpy.data.collections.keys()):
+            bpy.ops.collection.create(name=newCollectionName)
+            if(context.collection.name == "Master Collection"):
+                bpy.context.scene.collection.children.link(bpy.data.collections[newCollectionName])
+            else:
+                bpy.data.collections[context.collection.name].children.link(bpy.data.collections[newCollectionName])
+            return True
         else:
-            distanceReferenceEmpty = bpy.context.scene.objects["LODRIVER_DISTREF_EMPTY"]
-        #step through all selected objects to add drivers with increasing distances
-        for lodObjectNumber in range(len(selectedObjects)):
-            lodObject = selectedObjects[lodObjectNumber]
-            lodObject["LODRIVER_MINDISTANCE"] = lodObjectNumber * lodSpacingDistance
-            lodObject["LODRIVER_MAXDISTANCE"] = (lodObjectNumber * lodSpacingDistance) + lodSpacingDistance
-            lodObject["LODRIVER_SWITCHOFF"] = 0
-            viewportDriver = lodObject.driver_add("hide_viewport").driver
-            viewportDriverMaxVar = viewportDriver.variables.new()
-            viewportDriverMaxVar.name = "LODRIVERMAX"
-            viewportDriverMaxVar.targets[0].id = lodObject
-            viewportDriverMaxVar.targets[0].data_path = '["LODRIVER_MAXDISTANCE"]'
-            viewportDriverMinVar = viewportDriver.variables.new()
-            viewportDriverMinVar.name = "LODRIVERMIN"
-            viewportDriverMinVar.targets[0].id = lodObject
-            viewportDriverMinVar.targets[0].data_path = '["LODRIVER_MINDISTANCE"]'
-            viewportDriverSwitchoff = viewportDriver.variables.new()
-            viewportDriverSwitchoff.name = "LODRIVERSWITCHOFF"
-            viewportDriverSwitchoff.targets[0].id = lodObject
-            viewportDriverSwitchoff.targets[0].data_path = '["LODRIVER_SWITCHOFF"]'
-            viewportDriverDistanceToRefVar = viewportDriver.variables.new()
-            viewportDriverDistanceToRefVar.name = "LODRIVERDISTTOREF"
-            viewportDriverDistanceToRefVar.type = 'LOC_DIFF'
-            viewportDriverDistanceToRefVar.targets[0].id = distanceReferenceEmpty
-            viewportDriverDistanceToRefVar.targets[1].id = lodObject
-            viewportDriver.expression = "(LODRIVERDISTTOREF > LODRIVERMAX or LODRIVERDISTTOREF < LODRIVERMIN) and LODRIVERSWITCHOFF == 0"
-            renderDriver = lodObject.driver_add("hide_render").driver
-            renderDriverCopyViewportVar = renderDriver.variables.new()
-            renderDriverCopyViewportVar.name = "LODRIVERCOPYVIEWPORT"
-            renderDriverCopyViewportVar.targets[0].id = lodObject
-            renderDriverCopyViewportVar.targets[0].data_path = 'hide_viewport'
-            renderDriver.expression = "LODRIVERCOPYVIEWPORT"
-        return {'FINISHED'}
-    
-#function to add empties at the origins of selected objects, then parent the objects to the empties
-class LODRIVER_OT_ParentToEmpties(bpy.types.Operator):
-    bl_idname = "lodriver.parenttoempties"
-    bl_label = "Parent selected objects to empties"
-    bl_description = "Add an empty at the origin of each selected object, then parent the object to that empty"
-    
-    def execute(self, context):
-        #store selected objects
-        selectedObjects = bpy.context.selected_objects
-        #step through all selected objects to add empties and parent the objects to those empties
-        for objectToParent in selectedObjects:
-            bpy.ops.object.empty_add(type='PLAIN_AXES',location=objectToParent.location)
-            parentEmpty = bpy.context.selected_objects[0]
-            parentEmpty.name = "LODRIVER_TRANSFORM_" + objectToParent.name
-            objectToParent.parent = parentEmpty
-            objectToParent.matrix_parent_inverse
-            objectToParent.location = (0,0,0)
-        return {'FINISHED'}
-    
-#function to override drivers to make objects visible for easier duplication
-class LODRIVER_OT_VisibleOverrideOn(bpy.types.Operator):
-    bl_idname = "lodriver.visibleoverrideon"
-    bl_label = "Turn on visibile override"
-    bl_description = "Set a property so that the drivers for the active collection objects keep object visiblility on"
-    
-    def execute(self, context):
-        #store collection objects
-        collectionObjects = bpy.context.collection.objects
-        #step through all objects in active collection to add empties and parent the objects to those empties
-        for objectToMakeVisible in collectionObjects:
-            if("LODRIVER_SWITCHOFF" in objectToMakeVisible):
-                objectToMakeVisible["LODRIVER_SWITCHOFF"] = 1
-        return {'FINISHED'}
-    
-#function to clear override from drivers
-class LODRIVER_OT_VisibleOverrideOff(bpy.types.Operator):
-    bl_idname = "lodriver.visibleoverrideoff"
-    bl_label = "Turn off visibile override"
-    bl_description = "Clear the override property on the active collection objects so the drivers switch LODs as expected"
-    
-    def execute(self, context):
-        #store collection objects
-        collectionObjects = bpy.context.collection.objects
-        #step through all objects in active collection to add empties and parent the objects to those empties
-        for objectToRevertLOD in collectionObjects:
-            if("LODRIVER_SWITCHOFF" in objectToRevertLOD):
-                objectToRevertLOD["LODRIVER_SWITCHOFF"] = 0
-        return {'FINISHED'}
-             
-#register and unregister all LOD River classes
-lodriverClasses = (  LODRIVER_PT_LodPanel,
-                    LODRIVER_OT_CreateDrivers,
-                    LODRIVER_OT_ParentToEmpties,
-                    LODRIVER_OT_VisibleOverrideOn,
-                    LODRIVER_OT_VisibleOverrideOff)
+            return False
 
-register, unregister = bpy.utils.register_classes_factory(lodriverClasses)
+    def assignToCollection(self,context,assignCollectionName,assignObject):
+        if(assignObject.name not in bpy.data.collections[assignCollectionName].objects):
+            bpy.data.collections[assignCollectionName].objects.link(assignObject)
+            if(context.collection.name == "Master Collection"):
+                bpy.context.scene.collection.objects.unlink(assignObject)
+            else:
+                bpy.data.collections[context.collection.name].objects.unlink(assignObject)
+    
+    def modal(self, context, event):
+        #stop modal timer if the stop signal is activated
+        if(context.scene.ACTLODStopSignal == True):
+            context.window_manager.event_timer_remove(self.ACTLODTimer)
+            print("done")
+            return {'CANCELLED'}
+        #set chunk size to max, or to the scene object list length if the scene is small
+        chunkSizeAdjusted = self.chunkSizeMax
+        if(chunkSizeAdjusted > len(bpy.context.scene.objects)):
+            chunkSizeAdjusted = len(bpy.context.scene.objects)
+        #iterate through scene objects in chunks
+        for chunkStep in range(0,chunkSizeAdjusted):
+            if(self.chunkIteration < len(bpy.context.scene.objects)):
+                iterationObject = bpy.context.scene.objects[self.chunkIteration]
+                #only work with meshes
+                if(iterationObject.type == 'MESH'):
+                    #measure distances and swap mesh data accordingly
+                    shortestDistance = 999999
+                    for distRefObject in bpy.data.collections['ACTLOD_REFERENCES'].objects:
+                        measuredDistance = (distRefObject.matrix_world.translation-iterationObject.matrix_world.translation).length
+                        if(measuredDistance < shortestDistance):
+                            shortestDistance = measuredDistance
+                    print(str(shortestDistance) + " distance for " + iterationObject.name)
+                    #get desired lod level from distance
+                    lodLevel = math.floor(shortestDistance)
+                    if(lodLevel > 5):
+                        lodLevel = 5
+                    #set up LOD meshes if they do not exist
+                    if(not(iterationObject.data.name.split('_LOD_')[0] + "_LOD_" + str(lodLevel) in bpy.data.meshes)):
+                        if(iterationObject.data.name.split('_LOD_')[0] in bpy.data.meshes):
+                            iterationObject.data = bpy.data.meshes[iterationObject.data.name.split('_LOD_')[0]]
+                        lodTriangulate = iterationObject.modifiers.new('ACTLOD_TRIANGULATE','TRIANGULATE')
+                        lodDecimate = iterationObject.modifiers.new('ACTLOD_DECIMATE','DECIMATE')
+                        lodDecimate.ratio = 1 - (lodLevel * 0.2)
+                        lodMeshData = bpy.data.meshes.new_from_object(iterationObject.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+                        lodMeshData.name = iterationObject.data.name.split('_LOD_')[0] + "_LOD_" + str(lodLevel)
+                        iterationObject.modifiers.remove(lodDecimate)
+                        iterationObject.modifiers.remove(lodTriangulate)
+                        lodMeshData.use_fake_user = True
+                    iterationObject.data = bpy.data.meshes[iterationObject.data.name.split('_LOD_')[0] + '_LOD_' + str(lodLevel)]
+                self.chunkIteration += 1
+            else:
+                self.chunkIteration = 0
+        #print(str(self.chunkIteration))
+        return {'PASS_THROUGH'}
 
-#allow debugging for this addon in the Blender text editor
+    def execute(self, context):
+        context.scene.ACTLODStopSignal = False
+        self.ACTLODTimer = context.window_manager.event_timer_add(0.1, window=context.window)
+        context.window_manager.modal_handler_add(self)
+        #if an ACTLOD references collection is new to the scene, add a LOD distance reference object to it
+        if(self.setupCollection(context,'ACTLOD_REFERENCES') == True):
+            bpy.ops.object.select_all(action='DESELECT')
+            bpy.ops.object.empty_add(type='SPHERE')
+            referenceObject = bpy.context.selected_objects[0]
+            referenceObject.name = 'ACTLOD_DISTREF'
+            self.assignToCollection(context,'ACTLOD_REFERENCES',referenceObject)
+        return {'RUNNING_MODAL'}
+        
+        
+#function to stop Active LOD
+class ACTLOD_OT_StopActiveLod(bpy.types.Operator):
+    bl_idname = "actlod.stopactlod"
+    bl_label = "Stop Active LOD"
+    bl_description = "Stop Active LOD modal operator"
+    
+    #turn on the stop signal switch
+    def execute(self, context):
+        context.scene.ACTLODStopSignal = True
+        return {'FINISHED'}
+    
+#register and unregister all Active LOD classes
+actlodClasses = (  ACTLOD_PT_Settings,
+                    ACTLOD_OT_StartActiveLod,
+                    ACTLOD_OT_StopActiveLod
+                    )
+
+register, unregister = bpy.utils.register_classes_factory(actlodClasses)
+
 if __name__ == '__main__':
     register()
