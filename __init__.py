@@ -93,19 +93,26 @@ class ACTLOD_OT_StartActiveLod(bpy.types.Operator):
                     if(lodLevel > 5):
                         lodLevel = 5
                     #set up LOD meshes if they do not exist
-                    if(not(iterationObject.data.name.split('_LOD_')[0] + "_LOD_" + str(lodLevel) in bpy.data.meshes)):
-                        if(iterationObject.data.name.split('_LOD_')[0] in bpy.data.meshes):
+                    if(lodLevel != 0):
+                        if(not(iterationObject.data.name.split('_LOD_')[0] + "_LOD_" + str(lodLevel) in bpy.data.meshes)):
+                            if(iterationObject.data.name.split('_LOD_')[0] in bpy.data.meshes):
+                                iterationObject.data = bpy.data.meshes[iterationObject.data.name.split('_LOD_')[0]]
+                            iterationObject.data.use_fake_user = True
+                            lodTriangulate = iterationObject.modifiers.new('ACTLOD_TRIANGULATE','TRIANGULATE')
+                            lodDecimate = iterationObject.modifiers.new('ACTLOD_DECIMATE','DECIMATE')
+                            lodDecimate.ratio = 1 - (lodLevel * 0.2)
+                            lodMeshData = bpy.data.meshes.new_from_object(iterationObject.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+                            lodMeshData.name = iterationObject.data.name.split('_LOD_')[0] + "_LOD_" + str(lodLevel)
+                            iterationObject.modifiers.remove(lodDecimate)
+                            iterationObject.modifiers.remove(lodTriangulate)
+                            lodMeshData.use_fake_user = True
+                    #only set mesh if there is a change
+                    if(lodLevel == 0):
+                        if(iterationObject.data.name.split('_LOD_')[0] != iterationObject.data.name):
                             iterationObject.data = bpy.data.meshes[iterationObject.data.name.split('_LOD_')[0]]
-                        iterationObject.data.use_fake_user = True
-                        lodTriangulate = iterationObject.modifiers.new('ACTLOD_TRIANGULATE','TRIANGULATE')
-                        lodDecimate = iterationObject.modifiers.new('ACTLOD_DECIMATE','DECIMATE')
-                        lodDecimate.ratio = 1 - (lodLevel * 0.2)
-                        lodMeshData = bpy.data.meshes.new_from_object(iterationObject.evaluated_get(bpy.context.evaluated_depsgraph_get()))
-                        lodMeshData.name = iterationObject.data.name.split('_LOD_')[0] + "_LOD_" + str(lodLevel)
-                        iterationObject.modifiers.remove(lodDecimate)
-                        iterationObject.modifiers.remove(lodTriangulate)
-                        lodMeshData.use_fake_user = True
-                    iterationObject.data = bpy.data.meshes[iterationObject.data.name.split('_LOD_')[0] + '_LOD_' + str(lodLevel)]
+                    else:
+                        if(iterationObject.data.name != iterationObject.data.name.split('_LOD_')[0] + '_LOD_' + str(lodLevel)):
+                            iterationObject.data = bpy.data.meshes[iterationObject.data.name.split('_LOD_')[0] + '_LOD_' + str(lodLevel)]
                 self.chunkIteration += 1
             else:
                 self.chunkIteration = 0
