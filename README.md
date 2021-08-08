@@ -1,2 +1,2 @@
-# LODRiver
-Hide and show render and viewport visibility for objects using distance drivers for Blender 2.91.0
+# Active LOD
+Modal operator with start and stop menu to iterate through Blender scene in chunks and automatically generate and swap LOD meshes based on distances to multiple reference empties.
