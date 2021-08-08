@@ -75,7 +75,7 @@ class ACTLOD_OT_StartActiveLod(bpy.types.Operator):
         #stop modal timer if the stop signal is activated
         if(context.scene.ACTLODStopSignal == True):
             context.window_manager.event_timer_remove(self.ACTLODTimer)
-            print("Active LOD stopped.")
+            self.report({'INFO'},"Active LOD stopped.")
             return {'CANCELLED'}
         #set chunk size to max, or to the scene object list length if the scene is small
         chunkSizeAdjusted = self.chunkSizeMax
@@ -119,18 +119,22 @@ class ACTLOD_OT_StartActiveLod(bpy.types.Operator):
         return {'PASS_THROUGH'}
 
     def execute(self, context):
-        context.scene.ACTLODStopSignal = False
-        self.ACTLODTimer = context.window_manager.event_timer_add(0.1, window=context.window)
-        context.window_manager.modal_handler_add(self)
-        #if an ACTLOD references collection is new to the scene, add a LOD distance reference object to it
-        if(self.setupCollection(context,'ACTLOD_REFERENCES') == True):
-            bpy.ops.object.select_all(action='DESELECT')
-            bpy.ops.object.empty_add(type='SPHERE')
-            referenceObject = bpy.context.selected_objects[0]
-            referenceObject.name = 'ACTLOD_DISTREF'
-            self.assignToCollection(context,'ACTLOD_REFERENCES',referenceObject)
-        print("Active LOD started.")
-        return {'RUNNING_MODAL'}
+        if(context.scene.ACTLODStopSignal == True):
+            context.scene.ACTLODStopSignal = False
+            self.ACTLODTimer = context.window_manager.event_timer_add(0.1, window=context.window)
+            context.window_manager.modal_handler_add(self)
+            #if an ACTLOD references collection is new to the scene, add a LOD distance reference object to it
+            if(self.setupCollection(context,'ACTLOD_REFERENCES') == True):
+                bpy.ops.object.select_all(action='DESELECT')
+                bpy.ops.object.empty_add(type='SPHERE')
+                referenceObject = bpy.context.selected_objects[0]
+                referenceObject.name = 'ACTLOD_DISTREF'
+                self.assignToCollection(context,'ACTLOD_REFERENCES',referenceObject)
+            self.report({'INFO'},"Active LOD started.")
+            return {'RUNNING_MODAL'}
+        else:
+            self.report({'WARNING'},"Active LOD already running.")
+            return {'FINISHED'}
         
         
 #function to stop Active LOD
